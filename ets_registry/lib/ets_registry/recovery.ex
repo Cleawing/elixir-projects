@@ -1,5 +1,7 @@
 defmodule EtsRegistry.Recovery do
   use GenServer
+  use EtsRegistry.Common
+  use EtsRegistry.Transfer
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, :ok, opts)
@@ -15,7 +17,7 @@ defmodule EtsRegistry.Recovery do
     end
   end
 
-  @spec register(String.t) :: :ok | :error
+  @spec register(String.t) :: :ok | {:error, :not_found}
   def register(table) do
     GenServer.call(__MODULE__, {:register, table})
   end
@@ -37,7 +39,4 @@ defmodule EtsRegistry.Recovery do
       {:reply, {:error, :not_permitted}, state}
     end
   end
-
-  use EtsRegistry.HandleTransfer
-  use EtsRegistry.Common
 end

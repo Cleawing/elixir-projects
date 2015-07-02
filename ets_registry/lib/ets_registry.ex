@@ -8,9 +8,9 @@ defmodule EtsRegistry do
 
     children = [
       # Define workers and child supervisors to be supervised
-      worker(EtsRegistry.Sweeper, [[name: EtsRegistry.Sweeper]]),
-      worker(EtsRegistry.Recovery, [[name: EtsRegistry.Recovery]]),
-      worker(EtsRegistry.Server, [[name: EtsRegistry.Server]])
+      worker(EtsRegistry.Sweeper, [[debug: [:trace], name: EtsRegistry.Sweeper]]),
+      worker(EtsRegistry.Recovery, [[debug: [:trace], name: EtsRegistry.Recovery]]),
+      worker(EtsRegistry.Server, [[debug: [:trace], name: EtsRegistry.Server]])
     ]
 
     # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html

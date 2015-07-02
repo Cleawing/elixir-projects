@@ -1,5 +1,7 @@
 defmodule EtsRegistry.Server do
   use GenServer
+  use EtsRegistry.Common
+  use EtsRegistry.Transfer
 
   @table_prefix __MODULE__
 
@@ -12,8 +14,13 @@ defmodule EtsRegistry.Server do
     {:ok, []}
   end
 
+  @spec create(String.t) :: :ok | {:error, :not_found}
   def create(name) do
     GenServer.call(__MODULE__, {:create, name})
+  end
+
+  def drop(name) do
+    GenServer.call(__MODULE__, {:drop, name})
   end
 
   def heir_recovery() do
@@ -22,8 +29,17 @@ defmodule EtsRegistry.Server do
 
   def handle_call({:create, name}, {recover_to, _reference}, state) do
     case lookup_table(name) do
-      {:error, :not_found} -> {:reply, :ok, table(name) |> create(state, recover_to)}
+      {:error, :not_found} -> {:reply, :ok, table(name) |> create_table(state, recover_to)}
       {:ok, tab} -> {:reply, {:error, :already_created}, state}
+    end
+  end
+
+  def handle_call({:drop, name}, _, state) do
+    case lookup_table(name) do
+      res = {:error, :not_found} -> {:reply, res, state}
+      {:ok, tab} ->
+        EtsRegistry.Sweeper.destroy(tab)
+        {:reply, :ok, state -- [tab]}
     end
   end
 
@@ -53,13 +69,9 @@ defmodule EtsRegistry.Server do
 
   end
 
-  def handle_call({:drop, table}, _, state) do
-
-  end
-
-  @spec create(String.t, EtsRegistry.state, pid) :: EtsRegistry.state
-  def create(table, state, recover_to) do
-    state ++ [:ets.new(table, [:private, :named_table, {:heir, recover_to, Process.info(self())[:links]}])]
+  @spec create_table(atom, EtsRegistry.Data.state, pid) :: EtsRegistry.Data.state
+  def create_table(tab, state, recover_to) do
+    state ++ [:ets.new(tab, [:private, :named_table, {:heir, recover_to, Process.info(self())[:links]}])]
   end
 
   @spec table(String.t) :: atom
@@ -67,15 +79,16 @@ defmodule EtsRegistry.Server do
     String.to_atom("#{@table_prefix}.#{name}")
   end
 
-  @spec lookup_table(String.t) :: {:ok, :ets.tab} | {:error, :not_found}
+  @spec lookup_table(String.t | atom) :: {:ok, :ets.tab} | {:error, :not_found}
   def lookup_table(name) do
-    if table(name) in :ets.all do
-      {:ok, table(name)}
+    tab = case name do
+      tab when is_binary(name) -> table(name)
+      tab when is_atom(name) -> tab
+    end
+    if tab in :ets.all do
+      {:ok, tab}
     else
       {:error, :not_found}
     end
   end
-
-  use EtsRegistry.HandleTransfer
-  use EtsRegistry.Common
 end

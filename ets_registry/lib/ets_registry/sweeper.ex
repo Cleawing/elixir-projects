@@ -1,18 +1,25 @@
 defmodule EtsRegistry.Sweeper do
   use GenServer
+  use EtsRegistry.Common
 
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, :ok, opts)
+    GenServer.start_link(__MODULE__, [], opts)
   end
 
-  def init(:ok) do
-    {:ok, []}
+  def destroy(tab) do
+    :ets.setopts(tab, {:heir, :none})
+    :ets.give_away(tab, EtsRegistry.Sweeper.pid(), nil)
   end
 
   def handle_info({:'ETS-TRANSFER', tab, _, _}, state) do
-    # Just exit and linked ETS-table died, but Sweeper will be restarted by Supervisor
-    exit(:normal)
+    poison = spawn(EtsRegistry.Sweeper, :poison_pill, [])
+    :ets.give_away(tab, poison, nil)
+    {:noreply, state}
   end
 
-  use EtsRegistry.Common
+  def poison_pill do
+    receive do
+      {:'ETS-TRANSFER', _, _, _} -> :ok
+    end
+  end
 end
