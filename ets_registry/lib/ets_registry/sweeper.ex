@@ -8,7 +8,7 @@ defmodule EtsRegistry.Sweeper do
 
   def destroy(tab) do
     :ets.setopts(tab, {:heir, :none})
-    :ets.give_away(tab, EtsRegistry.Sweeper.pid(), nil)
+    :ets.give_away(tab, Process.whereis(__MODULE__), nil)
   end
 
   def handle_info({:'ETS-TRANSFER', tab, _, _}, state) do

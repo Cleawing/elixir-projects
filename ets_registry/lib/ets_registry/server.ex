@@ -23,13 +23,29 @@ defmodule EtsRegistry.Server do
     GenServer.call(__MODULE__, {:drop, name})
   end
 
+  def add(name, key, value) do
+    GenServer.call(__MODULE__, {:add, name, key, value})
+  end
+
+  def update(name, key, value) do
+    GenServer.call(__MODULE__, {:update, name, key, value})
+  end
+
+  def get(name, key) do
+    GenServer.call(__MODULE__, {:get, name, key})
+  end
+
+  def remove(name, key) do
+    GenServer.call(__MODULE__, {:remove, name, key})
+  end
+
   def heir_recovery() do
       GenServer.call(__MODULE__, :heir_recovery)
   end
 
   def handle_call({:create, name}, {recover_to, _reference}, state) do
     case lookup_table(name) do
-      {:error, :not_found} -> {:reply, :ok, table(name) |> create_table(state, recover_to)}
+      {:error, :not_found} -> {:reply, {:ok, name}, table(name) |> create_table(state, recover_to)}
       {:ok, tab} -> {:reply, {:error, :already_created}, state}
     end
   end
@@ -39,7 +55,55 @@ defmodule EtsRegistry.Server do
       res = {:error, :not_found} -> {:reply, res, state}
       {:ok, tab} ->
         EtsRegistry.Sweeper.destroy(tab)
-        {:reply, :ok, state -- [tab]}
+        {:reply, {:ok, name}, state -- [tab]}
+    end
+  end
+
+  def handle_call({:add, name, key, value}, _, state) do
+    case lookup_table(name) do
+      res = {:error, :not_found} -> {:reply, res, state}
+      {:ok, tab} ->
+        case :ets.insert_new(tab, {key, value}) do
+          true -> {:reply, {:ok, key, value}, state}
+          false -> {:reply, {:error, :already_exist}, state}
+        end
+    end
+  end
+
+  def handle_call({:update, name, key, value}, _, state) do
+    case lookup_table(name) do
+      res = {:error, :not_found} -> {:reply, res, state}
+      {:ok, tab} ->
+        if :ets.member(tab, key) do
+          :ets.insert(tab, {key, value})
+          {:reply, {:ok, key, value}, state}
+        else
+          {:reply, {:error, :not_found}, state}
+        end
+    end
+  end
+
+  def handle_call({:get, name, key}, _, state) do
+    case lookup_table(name) do
+      res = {:error, :not_found} -> {:reply, res, state}
+      {:ok, tab} ->
+        case :ets.lookup(tab, key) do
+          [{_, value}] -> {:reply, {:ok, key, value}, state}
+          [] -> {:reply, {:error, :not_found}, state}
+        end
+    end
+  end
+
+  def handle_call({:remove, name, key}, _, state) do
+    case lookup_table(name) do
+      res = {:error, :not_found} -> {:reply, res, state}
+      {:ok, tab} ->
+        case :ets.lookup(tab, key) do
+          [{_, value}] ->
+            :ets.delete(tab, key)
+            {:reply, {:ok, key, value}, state}
+          [] -> {:reply, {:error, :not_found}, state}
+        end
     end
   end
 
@@ -51,22 +115,6 @@ defmodule EtsRegistry.Server do
     else
       {:reply, {:error, :not_permitted}, state}
     end
-  end
-
-  def handle_call({:add, table, key, value}, _, state) do
-
-  end
-
-  def handle_call({:update, table, key, value}, _, state) do
-
-  end
-
-  def handle_call({:get, table, key}, _, state) do
-
-  end
-
-  def handle_call({:remove, table, key}, _, state) do
-
   end
 
   @spec create_table(atom, EtsRegistry.Data.state, pid) :: EtsRegistry.Data.state
